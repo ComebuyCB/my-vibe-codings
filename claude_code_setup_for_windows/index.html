@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>在 Windows WSL 下安裝 Claude Code</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            background-color: #f8f9fa;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 15px;
+            margin-block: 0px 30px;
+        }
+        .code-block {
+            background-color: #2d3748;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            margin: 12px 0;
+            overflow-x: auto;
+            border-left: 4px solid #3498db;
+        }
+        .comment {
+            color: #68d391;
+            font-style: italic;
+        }
+        .command {
+            color: #fbb6ce;
+        }
+        .section {
+            margin: 25px 0;
+        }
+        .highlight {
+            background-color: #fff3cd;
+            padding: 10px;
+            border-left: 4px solid #ffc107;
+            border-radius: 4px;
+            margin: 15px 0;
+        }
+        .step-number {
+            background: #3498db;
+            color: white;
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        .step-title {
+            font-weight: bold;
+            color: #2c3e50;
+            margin: 20px 0 10px 0;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>在 Windows WSL 下安裝 Claude Code</h1>
+        
+        <div class="section">
+            <div class="step-title">
+                <span class="step-number">1</span>Windows PowerShell 以系統管理員身份執行
+            </div>
+            <div class="code-block">
+<span class="command">wsl --install -d Ubuntu-22.04</span>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="step-title">
+                <span class="step-number">2</span>Ubuntu 基礎環境
+            </div>
+            <div class="code-block">
+<span class="command">sudo apt update && sudo apt upgrade -y</span><br>
+<span class="command">sudo apt install zip unzip -y</span>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="step-title">
+                <span class="step-number">3</span>Node.js 環境（前端開發 + Claude Code 必須）
+            </div>
+            <div class="code-block">
+<span class="command">curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash</span><br>
+<span class="command">source ~/.bashrc</span><br>
+<span class="command">nvm install --lts</span><br>
+<span class="command">nvm alias default lts/*</span><br>
+<span class="command">npm install -g @anthropic-ai/claude-code</span>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="step-title">
+                <span class="step-number">4</span>Java 開發環境（開發 Java 才須安裝）
+            </div>
+            <div class="code-block">
+<span class="command">curl -s "https://get.sdkman.io" | bash</span><br>
+<span class="command">source "$HOME/.sdkman/bin/sdkman-init.sh"</span><br>
+<span class="command">sdk install java 8.0.452.fx-zulu</span><br>
+<span class="command">sdk install maven 3.9.10</span>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="step-title">
+                <span class="step-number">5</span>版本控制工具svn（可選）
+            </div>
+            <div class="code-block">
+<span class="command">sudo apt install subversion -y</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
