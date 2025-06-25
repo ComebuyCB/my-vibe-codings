@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Artale Chair Background - 圖片處理工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .upload-zone {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px 20px;
+            text-align: center;
+            background: linear-gradient(135deg, #f8f9ff 0%, #f0f2ff 100%);
+            margin-bottom: 30px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: #764ba2;
+            background: linear-gradient(135deg, #f0f2ff 0%, #e6f0ff 100%);
+            transform: translateY(-2px);
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            margin-bottom: 20px;
+            opacity: 0.8;
+        }
+
+        .upload-text {
+            font-size: 1.3rem;
+            color: #555;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .upload-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 20px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .upload-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .tabs {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #eee;
+        }
+
+        .tab {
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
+            border-bottom: none;
+            padding: 12px 25px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            margin-right: 5px;
+            border-radius: 10px 10px 0 0;
+        }
+
+        .tab:last-child {
+            margin-right: 0;
+        }
+
+        .tab.active {
+            background: white;
+            border-color: #667eea;
+            color: #667eea;
+            transform: translateY(2px);
+        }
+
+        .tab:hover:not(.active) {
+            background: #e9ecef;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .result-section {
+            display: none;
+            margin-top: 30px;
+        }
+
+        .section-title {
+            font-size: 1.8rem;
+            color: #333;
+            margin-bottom: 20px;
+            font-weight: 700;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .image-grid {
+            display: grid;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .image-grid.single {
+            grid-template-columns: 1fr;
+            justify-items: center;
+        }
+
+        .image-grid.double {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .image-grid.quad {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .image-item {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .image-item:hover {
+            transform: translateY(-5px);
+        }
+
+        .processed-image {
+            max-width: 100%;
+            margin-bottom: 10px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+            background-image: 
+                linear-gradient(45deg, #f0f0f0 25%, transparent 25%), 
+                linear-gradient(-45deg, #f0f0f0 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #f0f0f0 75%), 
+                linear-gradient(-45deg, transparent 75%, #f0f0f0 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            background-color: #ffffff;
+        }
+
+        .image-info {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .cropped-section {
+            margin-top: 40px;
+            padding-top: 30px;
+            border-top: 2px solid #eee;
+        }
+
+        .cropped-title {
+            font-size: 1.5rem;
+            color: #333;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .cropped-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .cropped-item {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 10px;
+            text-align: center;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        }
+
+        .cropped-image {
+            width: 100%;
+            max-width: 180px;
+            margin-bottom: 8px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+            background-image: 
+                linear-gradient(45deg, #f0f0f0 25%, transparent 25%), 
+                linear-gradient(-45deg, #f0f0f0 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #f0f0f0 75%), 
+                linear-gradient(-45deg, transparent 75%, #f0f0f0 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            background-color: #ffffff;
+        }
+
+        .download-btn {
+            background: #17a2b8;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .download-btn:hover {
+            background: #138496;
+            transform: translateY(-1px);
+        }
+
+        .download-all-btn {
+            background: #fd7e14;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+        }
+
+        .download-all-btn:hover {
+            background: #e8650e;
+            transform: translateY(-2px);
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            color: #667eea;
+            font-size: 1.1rem;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .image-grid.double {
+                grid-template-columns: 1fr;
+            }
+            
+            .cropped-grid {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🪑 Artale Chair Background</h1>
+        </div>
+
+        <div class="content">
+            <div class="upload-zone" id="uploadZone">
+                <div class="upload-icon">📸</div>
+                <div class="upload-text">將圖片拖拽到此處，或點擊選擇檔案</div>
+                <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+                    選擇圖片
+                </button>
+                <input type="file" id="fileInput" class="file-input" accept="image/*" multiple>
+            </div>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <div>正在處理圖片，請稍候...</div>
+            </div>
+
+            <div class="result-section" id="resultSection">
+                <div class="tabs">
+                    <div class="tab active" onclick="switchTab(1)">1張圖</div>
+                    <div class="tab" onclick="switchTab(2)">2張圖</div>
+                    <div class="tab" onclick="switchTab(4)">4張圖</div>
+                </div>
+
+                <div class="tab-content active" id="tab1">
+                    <div class="section-title">1張圖:</div>
+                    <div class="image-grid single" id="imageGrid1"></div>
+                    <div class="cropped-section">
+                        <div class="cropped-title">裁切後:</div>
+                        <button class="download-all-btn" id="downloadAllBtn1" onclick="downloadAllCropped(1)">批量下載圖片</button>
+                        <div class="cropped-grid" id="croppedGrid1"></div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="tab2">
+                    <div class="section-title">2張圖:</div>
+                    <div class="image-grid single" id="imageGrid2"></div>
+                    <div class="cropped-section">
+                        <div class="cropped-title">裁切後:</div>
+                        <button class="download-all-btn" id="downloadAllBtn2" onclick="downloadAllCropped(2)">批量下載圖片</button>
+                        <div class="cropped-grid" id="croppedGrid2"></div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="tab4">
+                    <div class="section-title">4張圖:</div>
+                    <div class="image-grid single" id="imageGrid4"></div>
+                    <div class="cropped-section">
+                        <div class="cropped-title">裁切後:</div>
+                        <button class="download-all-btn" id="downloadAllBtn4" onclick="downloadAllCropped(4)">批量下載圖片</button>
+                        <div class="cropped-grid" id="croppedGrid4"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script>
+        let selectedFiles = [];
+        let allProcessedImages = {1: [], 2: [], 4: []};
+        let allCroppedImages = {1: [], 2: [], 4: []};
+        let currentTab = 1;
+
+        // 初始化事件監聽器
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+        const resultSection = document.getElementById('resultSection');
+        const loading = document.getElementById('loading');
+
+        // 拖拽上傳事件
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            const files = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith('image/'));
+            handleFiles(files);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files);
+            handleFiles(files);
+        });
+
+        async function handleFiles(files) {
+            if (files.length === 0) {
+                alert('請選擇至少一張圖片！');
+                return;
+            }
+
+            selectedFiles = files;
+            
+            // 更新上傳區域顯示
+            const uploadText = document.querySelector('.upload-text');
+            uploadText.textContent = `已選擇 ${files.length} 張圖片，正在處理...`;
+
+            // 自動處理1、2、4張圖
+            loading.style.display = 'block';
+            resultSection.style.display = 'none';
+
+            try {
+                await processAllVariants();
+                
+                loading.style.display = 'none';
+                resultSection.style.display = 'block';
+                
+                uploadText.textContent = `已完成處理 ${files.length} 張圖片，請切換標籤查看結果`;
+            } catch (error) {
+                console.error('處理圖片時發生錯誤:', error);
+                alert('處理圖片時發生錯誤，請重試');
+                loading.style.display = 'none';
+            }
+        }
+
+        async function processAllVariants() {
+            // 處理1張、2張、4張圖的所有變體
+            for (const targetCount of [1, 2, 4]) {
+                allProcessedImages[targetCount] = [];
+                allCroppedImages[targetCount] = [];
+
+                // 處理圖片
+                for (let i = 0; i < Math.min(selectedFiles.length, targetCount); i++) {
+                    const file = selectedFiles[i];
+                    const processedImage = await processImage(file, targetCount, i);
+                    allProcessedImages[targetCount].push(processedImage);
+                }
+
+                // 如果圖片不夠，用第一張填充
+                while (allProcessedImages[targetCount].length < targetCount && allProcessedImages[targetCount].length > 0) {
+                    const firstImage = allProcessedImages[targetCount][0];
+                    allProcessedImages[targetCount].push({
+                        ...firstImage,
+                        filename: `${firstImage.filename}_copy_${allProcessedImages[targetCount].length}`
+                    });
+                }
+
+                // 顯示處理結果
+                displayProcessedImages(targetCount);
+                
+                // 生成裁切圖片
+                await generateCroppedImages(targetCount);
+            }
+        }
+
+        async function processImages(targetCount) {
+            if (selectedFiles.length === 0) return;
+
+            loading.style.display = 'block';
+            resultSection.style.display = 'none';
+
+            try {
+                processedImages = [];
+                croppedImages = [];
+
+                // 處理圖片
+                for (let i = 0; i < Math.min(selectedFiles.length, targetCount); i++) {
+                    const file = selectedFiles[i];
+                    const processedImage = await processImage(file, targetCount, i);
+                    processedImages.push(processedImage);
+                }
+
+                // 如果圖片不夠，用第一張填充
+                while (processedImages.length < targetCount && processedImages.length > 0) {
+                    const firstImage = processedImages[0];
+                    processedImages.push({
+                        ...firstImage,
+                        filename: `${firstImage.filename}_copy_${processedImages.length}`
+                    });
+                }
+
+                // 顯示處理結果
+                displayProcessedImages(targetCount);
+                
+                // 生成裁切圖片
+                await generateCroppedImages(targetCount);
+                
+                loading.style.display = 'none';
+                resultSection.style.display = 'block';
+
+            } catch (error) {
+                console.error('處理圖片時發生錯誤:', error);
+                alert('處理圖片時發生錯誤，請重試');
+                loading.style.display = 'none';
+            }
+        }
+
+        async function processImage(file, targetCount, index) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    let targetWidth, targetHeight;
+                    
+                    // 根據目標數量確定尺寸
+                    if (targetCount === 1) {
+                        targetWidth = targetHeight = 250;
+                    } else if (targetCount === 2) {
+                        // 判斷圖片方向
+                        if (img.width > img.height) {
+                            targetWidth = 499;
+                            targetHeight = 250;
+                        } else {
+                            targetWidth = 250;
+                            targetHeight = 499;
+                        }
+                    } else { // targetCount === 4
+                        targetWidth = targetHeight = 499;
+                    }
+
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = targetWidth;
+                    canvas.height = targetHeight;
+
+                    // 填充透明背景
+                    ctx.clearRect(0, 0, targetWidth, targetHeight);
+
+                    // 計算縮放比例 (contain 效果)
+                    const scaleX = targetWidth / img.width;
+                    const scaleY = targetHeight / img.height;
+                    const scale = Math.min(scaleX, scaleY, 1); // 不放大
+
+                    const scaledWidth = img.width * scale;
+                    const scaledHeight = img.height * scale;
+
+                    // 居中繪製
+                    const x = (targetWidth - scaledWidth) / 2;
+                    const y = (targetHeight - scaledHeight) / 2;
+
+                    ctx.drawImage(img, x, y, scaledWidth, scaledHeight);
+
+                    resolve({
+                        canvas: canvas,
+                        dataUrl: canvas.toDataURL('image/png'),
+                        filename: file.name.replace(/\.[^/.]+$/, '') + `_processed_${targetWidth}x${targetHeight}.png`,
+                        width: targetWidth,
+                        height: targetHeight,
+                        originalFile: file
+                    });
+                };
+                img.src = URL.createObjectURL(file);
+            });
+        }
+
+        function displayProcessedImages(targetCount) {
+            const imageGrid = document.getElementById(`imageGrid${targetCount}`);
+            
+            imageGrid.innerHTML = '';
+
+            // 只顯示第一張圖作為預覽
+            const imgData = allProcessedImages[targetCount][0];
+            const imageItem = document.createElement('div');
+            imageItem.className = 'image-item';
+
+            const img = document.createElement('img');
+            img.src = imgData.dataUrl;
+            img.className = 'processed-image';
+            img.alt = `處理後圖片預覽`;
+
+            const info = document.createElement('div');
+            info.className = 'image-info';
+            info.textContent = `尺寸: ${imgData.width} × ${imgData.height} (共${targetCount}張)`;
+
+            imageItem.appendChild(img);
+            imageItem.appendChild(info);
+            imageGrid.appendChild(imageItem);
+        }
+
+        async function generateCroppedImages(targetCount) {
+            allCroppedImages[targetCount] = [];
+
+            if (targetCount === 1) {
+                // 1張圖直接輸出
+                const imgData = allProcessedImages[targetCount][0];
+                allCroppedImages[targetCount].push({
+                    dataUrl: imgData.dataUrl,
+                    filename: imgData.filename.replace('_processed_', '_cropped_')
+                });
+            } else if (targetCount === 2) {
+                // 2張圖的裁切邏輯
+                await cropImagesForTwo(targetCount);
+            } else if (targetCount === 4) {
+                // 4張圖的裁切邏輯
+                await cropImagesForFour(targetCount);
+            }
+
+            displayCroppedImages(targetCount);
+        }
+
+        async function cropImagesForTwo(targetCount) {
+            const img1 = allProcessedImages[targetCount][0];
+            const img2 = allProcessedImages[targetCount][1];
+
+            // 分別從兩張處理後的圖片裁切250x250
+            if (img1.width === 499) {
+                // 橫向圖片 (499x250)，應該左右切分
+                const positions = ['left', 'right'];
+                
+                await Promise.all([img1, img2].map(async (imgData, i) => {
+                    const cropCanvas = document.createElement('canvas');
+                    const cropCtx = cropCanvas.getContext('2d');
+                    cropCanvas.width = 250;
+                    cropCanvas.height = 250;
+
+                    const img = new Image();
+                    await new Promise(resolve => {
+                        img.onload = () => {
+                            // 橫向圖片：第一張從左側裁切，第二張從右側裁切
+                            const startX = i === 0 ? 0 : 249; // left=0, right=249 (有1px重疊)
+                            cropCtx.drawImage(img, startX, 0, 250, 250, 0, 0, 250, 250);
+                            resolve();
+                        };
+                        img.src = imgData.dataUrl;
+                    });
+                    
+                    allCroppedImages[targetCount].push({
+                        dataUrl: cropCanvas.toDataURL('image/png'),
+                        filename: `cropped_${positions[i]}.png`
+                    });
+                }));
+                
+            } else {
+                // 直向圖片 (250x499)，應該上下切分
+                const positions = ['top', 'bottom'];
+                
+                await Promise.all([img1, img2].map(async (imgData, i) => {
+                    const cropCanvas = document.createElement('canvas');
+                    const cropCtx = cropCanvas.getContext('2d');
+                    cropCanvas.width = 250;
+                    cropCanvas.height = 250;
+
+                    const img = new Image();
+                    await new Promise(resolve => {
+                        img.onload = () => {
+                            // 直向圖片：第一張從上方裁切，第二張從下方裁切
+                            const startY = i === 0 ? 0 : 249; // top=0, bottom=249 (有1px重疊)
+                            cropCtx.drawImage(img, 0, startY, 250, 250, 0, 0, 250, 250);
+                            resolve();
+                        };
+                        img.src = imgData.dataUrl;
+                    });
+                    
+                    allCroppedImages[targetCount].push({
+                        dataUrl: cropCanvas.toDataURL('image/png'),
+                        filename: `cropped_${positions[i]}.png`
+                    });
+                }));
+            }
+        }
+
+        async function cropImagesForFour(targetCount) {
+            // 合併4張圖片成2x2布局
+            const combinedCanvas = document.createElement('canvas');
+            const ctx = combinedCanvas.getContext('2d');
+            combinedCanvas.width = 998; // 499 + 499
+            combinedCanvas.height = 998; // 499 + 499
+
+            // 繪製4張圖片
+            for (let i = 0; i < 4; i++) {
+                const imgData = allProcessedImages[targetCount][i];
+                const imgElement = new Image();
+                imgElement.src = imgData.dataUrl;
+                
+                await new Promise(resolve => {
+                    imgElement.onload = () => {
+                        const col = i % 2;
+                        const row = Math.floor(i / 2);
+                        const x = col * 499;
+                        const y = row * 499;
+                        ctx.drawImage(imgElement, x, y);
+                        resolve();
+                    };
+                });
+            }
+
+            // 裁切出4張250x250的圖片，有重疊
+            for (let row = 0; row < 2; row++) {
+                for (let col = 0; col < 2; col++) {
+                    const cropCanvas = document.createElement('canvas');
+                    const cropCtx = cropCanvas.getContext('2d');
+                    cropCanvas.width = 250;
+                    cropCanvas.height = 250;
+
+                    // 計算起始位置，製造重疊
+                    const startX = col === 0 ? 0 : 249; // 第二列從249開始
+                    const startY = row === 0 ? 0 : 249; // 第二行從249開始
+                    
+                    cropCtx.drawImage(combinedCanvas, startX, startY, 250, 250, 0, 0, 250, 250);
+
+                    const positions = ['top_left', 'top_right', 'bottom_left', 'bottom_right'];
+                    const index = row * 2 + col;
+                    allCroppedImages[targetCount].push({
+                        dataUrl: cropCanvas.toDataURL('image/png'),
+                        filename: `cropped_${positions[index]}.png`
+                    });
+                }
+            }
+        }
+
+        function displayCroppedImages(targetCount) {
+            const croppedGrid = document.getElementById(`croppedGrid${targetCount}`);
+            croppedGrid.innerHTML = '';
+
+            allCroppedImages[targetCount].forEach((imgData, index) => {
+                const croppedItem = document.createElement('div');
+                croppedItem.className = 'cropped-item';
+
+                const img = document.createElement('img');
+                img.src = imgData.dataUrl;
+                img.className = 'cropped-image';
+                img.alt = `裁切圖片 ${index + 1}`;
+
+                const downloadBtn = document.createElement('button');
+                downloadBtn.className = 'download-btn';
+                
+                // 根據檔名設定按鈕文字
+                let btnText = '下載';
+                if (imgData.filename.includes('top_left')) btnText = '下載-上左';
+                else if (imgData.filename.includes('top_right')) btnText = '下載-上右';
+                else if (imgData.filename.includes('bottom_left')) btnText = '下載-下左';
+                else if (imgData.filename.includes('bottom_right')) btnText = '下載-下右';
+                else if (imgData.filename.includes('top')) btnText = '下載-上';
+                else if (imgData.filename.includes('bottom')) btnText = '下載-下';
+                else if (imgData.filename.includes('left')) btnText = '下載-左';
+                else if (imgData.filename.includes('right')) btnText = '下載-右';
+                
+                downloadBtn.textContent = btnText;
+                downloadBtn.onclick = () => downloadImage(imgData.dataUrl, imgData.filename);
+
+                croppedItem.appendChild(img);
+                croppedItem.appendChild(downloadBtn);
+                croppedGrid.appendChild(croppedItem);
+            });
+        }
+
+        function downloadImage(dataUrl, filename) {
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = dataUrl;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        async function downloadAllCropped(targetCount) {
+            if (allCroppedImages[targetCount].length === 0) {
+                alert('沒有裁切圖片可下載！');
+                return;
+            }
+
+            const downloadBtn = document.getElementById(`downloadAllBtn${targetCount}`);
+            downloadBtn.textContent = '下載中...';
+            downloadBtn.disabled = true;
+
+            try {
+                // 批量下載每張圖片，間隔一小段時間避免瀏覽器阻擋
+                for (let i = 0; i < allCroppedImages[targetCount].length; i++) {
+                    const imgData = allCroppedImages[targetCount][i];
+                    
+                    // 下載單張圖片
+                    downloadImage(imgData.dataUrl, imgData.filename);
+                    
+                    // 添加小延遲，避免瀏覽器阻擋多重下載
+                    if (i < allCroppedImages[targetCount].length - 1) {
+                        await new Promise(resolve => setTimeout(resolve, 200));
+                    }
+                }
+                
+                alert(`成功下載 ${allCroppedImages[targetCount].length} 張圖片！`);
+            } catch (error) {
+                console.error('批量下載失敗:', error);
+                alert('批量下載失敗，請嘗試單獨下載圖片');
+            }
+
+            downloadBtn.textContent = '批量下載圖片';
+            downloadBtn.disabled = false;
+        }
+
+        function switchTab(targetCount) {
+            // 隱藏所有標籤內容
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            // 移除所有標籤的active狀態
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // 顯示選中的標籤內容
+            document.getElementById(`tab${targetCount}`).classList.add('active');
+            
+            // 設置選中的標籤為active狀態
+            document.querySelectorAll('.tab')[targetCount === 1 ? 0 : (targetCount === 2 ? 1 : 2)].classList.add('active');
+            
+            currentTab = targetCount;
+        }
+    </script>
+</body>
+</html>
