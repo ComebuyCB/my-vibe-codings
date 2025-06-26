@@ -131,6 +131,34 @@
 <span class="command">sudo apt install subversion -y</span>
             </div>
         </div>
+
+        <div class="section">
+            <div class="step-title">
+                <span class="step-number">6</span>WSL Git 與 GitHub 認證設定
+            </div>
+            <div class="highlight">
+                <strong>說明：</strong>讓 WSL 中的 Git 能夠使用 Windows 的 Git Credential Manager 來處理 GitHub 認證，避免每次 push 都要輸入帳密。
+            </div>
+            
+            <h4 style="color: #2c3e50; margin-top: 20px;">設定認證管理器</h4>
+            <div class="code-block">
+<span class="command">git config --global credential.helper "/mnt/c/Program\ Files/Git/mingw64/libexec/git-core/git-credential-manager-core.exe"</span>
+            </div>
+            
+            <h4 style="color: #2c3e50; margin-top: 20px;">查看目前設定</h4>
+            <div class="code-block">
+<span class="command">git config --global --get credential.helper</span>
+            </div>
+            
+            <h4 style="color: #2c3e50; margin-top: 20px;">移除設定（如果需要）</h4>
+            <div class="code-block">
+<span class="command">git config --global --unset credential.helper</span>
+            </div>
+            
+            <div class="highlight">
+                <strong>注意：</strong>設定後第一次 push 時，Windows 會跳出認證視窗，登入後就會記住認證資訊。
+            </div>
+        </div>
     </div>
 </body>
 </html>
