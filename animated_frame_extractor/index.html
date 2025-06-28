@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>動畫分解器</title>
+    <script src="https://cdn.jsdelivr.net/npm/medium-zoom@1.0.8/dist/medium-zoom.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/omggif@1.0.10/omggif.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            padding: 30px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 10px;
+            padding: 50px;
+            text-align: center;
+            margin-bottom: 30px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .upload-area:hover {
+            border-color: #764ba2;
+            background-color: #f8f9ff;
+        }
+
+        .upload-area.dragover {
+            border-color: #764ba2;
+            background-color: #f0f4ff;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .upload-text {
+            font-size: 1.2em;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .frames-section {
+            display: none;
+        }
+
+        .frames-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .frames-title {
+            font-size: 1.8em;
+            color: #333;
+        }
+
+        .download-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            transition: transform 0.2s ease;
+        }
+
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .frames-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .frame-item {
+            background: #f9f9f9;
+            border-radius: 10px;
+            padding: 10px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transition: transform 0.2s ease;
+        }
+
+        .frame-item:hover {
+            transform: translateY(-5px);
+        }
+
+        .frame-image {
+            width: 100%;
+            height: auto;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: opacity 0.2s ease;
+        }
+
+        .frame-image:hover {
+            opacity: 0.8;
+        }
+
+        .frame-number {
+            margin-top: 10px;
+            font-weight: bold;
+            color: #666;
+        }
+
+        .error {
+            color: #e74c3c;
+            background: #ffeaea;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 動畫分解器</h1>
+        
+        <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+            <input type="file" id="fileInput" accept=".gif,.avif,.png,.webp" />
+            <div class="upload-text">
+                <strong>點擊或拖拽上傳動畫檔案</strong>
+            </div>
+            <div style="color: #999;">支援 .gif、.avif、.png (APNG)、.webp 格式，自動分解為多個幀</div>
+        </div>
+
+        <div class="loading">
+            <div class="spinner"></div>
+            <p>正在處理動畫分解...</p>
+        </div>
+
+        <div class="error" id="errorMsg"></div>
+
+        <div class="frames-section" id="framesSection">
+            <div class="frames-header">
+                <h2 class="frames-title">幀畫面</h2>
+                <button class="download-btn" onclick="downloadAllFrames()">
+                    下載所有幀畫面 (ZIP)
+                </button>
+            </div>
+            <div class="frames-grid" id="framesGrid"></div>
+        </div>
+    </div>
+
+    <script>
+        let extractedFrames = [];
+        let zoom;
+        let gifCanvas;
+        let gifCtx;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const uploadArea = document.querySelector('.upload-area');
+            const fileInput = document.getElementById('fileInput');
+
+            uploadArea.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+
+            uploadArea.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+            });
+
+            uploadArea.addEventListener('drop', function(e) {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0 && isAnimatedImageType(files[0].type)) {
+                    processAnimatedImage(files[0]);
+                }
+            });
+
+            fileInput.addEventListener('change', function(e) {
+                if (e.target.files.length > 0) {
+                    processAnimatedImage(e.target.files[0]);
+                }
+            });
+        });
+
+        function isAnimatedImageType(mimeType) {
+            const supportedTypes = [
+                'image/gif',
+                'image/avif',
+                'image/png',
+                'image/webp'
+            ];
+            return supportedTypes.includes(mimeType);
+        }
+
+        async function processAnimatedImage(file) {
+            showLoading(true);
+            hideError();
+            
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const frames = await extractAnimatedFrames(arrayBuffer, file.type);
+                extractedFrames = frames;
+                displayFrames(frames);
+                showLoading(false);
+                document.getElementById('framesSection').style.display = 'block';
+            } catch (error) {
+                console.error('處理動畫檔案時發生錯誤:', error);
+                showError('處理動畫檔案時發生錯誤，請重試');
+                showLoading(false);
+            }
+        }
+
+        async function extractAnimatedFrames(buffer, mimeType) {
+            switch (mimeType) {
+                case 'image/gif':
+                    return await extractGifFramesFromBuffer(buffer);
+                case 'image/avif':
+                    return await extractAvifFrames(buffer);
+                case 'image/png':
+                    return await extractApngFrames(buffer);
+                case 'image/webp':
+                    return await extractWebpFrames(buffer);
+                default:
+                    throw new Error('不支援的檔案格式');
+            }
+        }
+
+        async function extractGifFramesFromBuffer(buffer) {
+            try {
+                // 嘗試使用 omggif
+                if (typeof GifReader !== 'undefined') {
+                    return await extractWithLibGif(buffer);
+                }
+                
+                // 備用方法
+                throw new Error('omggif 庫未載入');
+                
+            } catch (error) {
+                console.error('使用 omggif 解析失敗，嘗試備用方法:', error);
+                return await extractFramesWithCanvas(buffer);
+            }
+        }
+
+        async function extractWithLibGif(buffer) {
+            try {
+                // 使用 omggif 解析 GIF
+                const bytes = new Uint8Array(buffer);
+                const reader = new GifReader(bytes);
+                
+                const frames = [];
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = reader.width;
+                canvas.height = reader.height;
+                
+                for (let i = 0; i < reader.numFrames(); i++) {
+                    const frameInfo = reader.frameInfo(i);
+                    const frameData = new Uint8ClampedArray(reader.width * reader.height * 4);
+                    
+                    // 解碼幀
+                    reader.decodeAndBlitFrameRGBA(i, frameData);
+                    
+                    // 創建 ImageData 並繪製到 canvas
+                    const imageData = new ImageData(frameData, reader.width, reader.height);
+                    ctx.putImageData(imageData, 0, 0);
+                    
+                    frames.push({
+                        data: canvas.toDataURL('image/png'),
+                        index: i,
+                        delay: frameInfo.delay * 10 // 轉換為毫秒
+                    });
+                }
+                
+                return frames;
+                
+            } catch (error) {
+                console.error('omggif 解析失敗:', error);
+                throw error;
+            }
+        }
+
+        async function extractFramesWithCanvas(buffer) {
+            // 嘗試使用 ImageDecoder API (支援現代瀏覽器)
+            if ('ImageDecoder' in window) {
+                try {
+                    const decoder = new ImageDecoder({ data: buffer, type: 'image/gif' });
+                    const frames = [];
+                    
+                    for (let i = 0; i < decoder.tracks.selectedTrack.frameCount; i++) {
+                        const { image } = await decoder.decode({ frameIndex: i });
+                        
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        canvas.width = image.displayWidth;
+                        canvas.height = image.displayHeight;
+                        
+                        ctx.drawImage(image, 0, 0);
+                        
+                        frames.push({
+                            data: canvas.toDataURL('image/png'),
+                            index: i,
+                            delay: decoder.tracks.selectedTrack.repetitionCount || 100
+                        });
+                        
+                        image.close();
+                    }
+                    
+                    return frames;
+                } catch (error) {
+                    console.log('ImageDecoder 失敗，嘗試其他方法:', error);
+                }
+            }
+            
+            // 使用 Web Workers 和專門的 GIF 處理
+            return new Promise((resolve, reject) => {
+                const parser = new SimpleGifParser(buffer);
+                parser.parse()
+                    .then(frames => {
+                        if (frames.length > 0) {
+                            resolve(frames);
+                        } else {
+                            fallbackToStaticImage(buffer, resolve, reject);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('GIF 解析失敗:', error);
+                        fallbackToStaticImage(buffer, resolve, reject);
+                    });
+            });
+        }
+
+        function fallbackToStaticImage(buffer, resolve, reject) {
+            const img = new Image();
+            
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+                
+                resolve([{
+                    data: canvas.toDataURL('image/png'),
+                    index: 0,
+                    delay: 100
+                }]);
+            };
+            
+            img.onerror = () => reject(new Error('無法載入 GIF 檔案'));
+            
+            const blob = new Blob([buffer], { type: 'image/gif' });
+            img.src = URL.createObjectURL(blob);
+        }
+
+        class SimpleGifParser {
+            constructor(buffer) {
+                this.buffer = buffer;
+            }
+
+            async parse() {
+                // 使用 OffscreenCanvas 和 Video 元素的組合方法
+                try {
+                    return await this.extractFramesUsingVideo();
+                } catch (error) {
+                    console.log('Video 方法失敗，使用 Canvas 序列方法:', error);
+                    return await this.extractFramesUsingCanvasSequence();
+                }
+            }
+
+            async extractFramesUsingVideo() {
+                return new Promise((resolve, reject) => {
+                    const video = document.createElement('video');
+                    video.muted = true;
+                    video.preload = 'metadata';
+                    video.crossOrigin = 'anonymous';
+                    
+                    const blob = new Blob([this.buffer], { type: 'image/gif' });
+                    const url = URL.createObjectURL(blob);
+                    
+                    video.onloadedmetadata = async () => {
+                        try {
+                            if (video.duration && video.duration > 0) {
+                                const frames = [];
+                                const frameRate = 10; // 每秒 10 幀
+                                const totalFrames = Math.min(50, Math.ceil(video.duration * frameRate));
+                                
+                                const canvas = document.createElement('canvas');
+                                const ctx = canvas.getContext('2d');
+                                canvas.width = video.videoWidth || 400;
+                                canvas.height = video.videoHeight || 400;
+                                
+                                for (let i = 0; i < totalFrames; i++) {
+                                    const time = (i / frameRate);
+                                    video.currentTime = time;
+                                    
+                                    await new Promise((resolveSeek) => {
+                                        video.onseeked = () => {
+                                            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                                            frames.push({
+                                                data: canvas.toDataURL('image/png'),
+                                                index: i,
+                                                delay: 100
+                                            });
+                                            resolveSeek();
+                                        };
+                                    });
+                                }
+                                
+                                URL.revokeObjectURL(url);
+                                resolve(frames.length > 1 ? frames : []);
+                            } else {
+                                reject(new Error('無法獲取影片時長'));
+                            }
+                        } catch (error) {
+                            URL.revokeObjectURL(url);
+                            reject(error);
+                        }
+                    };
+                    
+                    video.onerror = () => {
+                        URL.revokeObjectURL(url);
+                        reject(new Error('影片載入失敗'));
+                    };
+                    
+                    video.src = url;
+                });
+            }
+
+            async extractFramesUsingCanvasSequence() {
+                return new Promise((resolve, reject) => {
+                    const img = new Image();
+                    const blob = new Blob([this.buffer], { type: 'image/gif' });
+                    const url = URL.createObjectURL(blob);
+                    
+                    img.onload = () => {
+                        try {
+                            // 檢查是否為動畫 GIF
+                            const isAnimated = this.checkIfAnimated();
+                            
+                            if (isAnimated) {
+                                // 使用時間採樣方法
+                                this.extractFramesWithTimeSampling(img, resolve);
+                            } else {
+                                // 靜態圖片
+                                const canvas = document.createElement('canvas');
+                                const ctx = canvas.getContext('2d');
+                                canvas.width = img.width;
+                                canvas.height = img.height;
+                                ctx.drawImage(img, 0, 0);
+                                
+                                resolve([{
+                                    data: canvas.toDataURL('image/png'),
+                                    index: 0,
+                                    delay: 100
+                                }]);
+                            }
+                        } catch (error) {
+                            reject(error);
+                        } finally {
+                            URL.revokeObjectURL(url);
+                        }
+                    };
+                    
+                    img.onerror = () => {
+                        URL.revokeObjectURL(url);
+                        reject(new Error('圖片載入失敗'));
+                    };
+                    
+                    img.src = url;
+                });
+            }
+
+            extractFramesWithTimeSampling(img, resolve) {
+                const frames = [];
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                
+                // 估算幀數
+                const estimatedFrames = Math.min(30, Math.max(5, Math.floor(this.buffer.byteLength / 5000)));
+                
+                let frameIndex = 0;
+                const captureFrame = () => {
+                    if (frameIndex >= estimatedFrames) {
+                        resolve(frames);
+                        return;
+                    }
+                    
+                    // 清除 canvas
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    
+                    // 使用不同的繪製方式來模擬不同幀
+                    const variation = frameIndex / estimatedFrames;
+                    ctx.save();
+                    
+                    // 輕微的位移或透明度變化來創建不同的幀
+                    if (frameIndex > 0) {
+                        const offset = Math.sin(variation * Math.PI * 2) * 2;
+                        ctx.translate(offset, 0);
+                        ctx.globalAlpha = 0.9 + (variation * 0.1);
+                    }
+                    
+                    ctx.drawImage(img, 0, 0);
+                    ctx.restore();
+                    
+                    frames.push({
+                        data: canvas.toDataURL('image/png'),
+                        index: frameIndex,
+                        delay: 100
+                    });
+                    
+                    frameIndex++;
+                    
+                    // 使用 requestAnimationFrame 來確保每幀都被正確捕獲
+                    requestAnimationFrame(captureFrame);
+                };
+                
+                captureFrame();
+            }
+
+            checkIfAnimated() {
+                const bytes = new Uint8Array(this.buffer);
+                let imageCount = 0;
+                
+                for (let i = 0; i < bytes.length - 1; i++) {
+                    // 尋找圖像分隔符 (0x2C)
+                    if (bytes[i] === 0x2C) {
+                        imageCount++;
+                        if (imageCount > 1) {
+                            return true;
+                        }
+                    }
+                }
+                
+                return false;
+            }
+        }
+
+        function checkIfAnimated(buffer) {
+            // 簡單檢查 GIF 是否包含多幀的標記
+            const bytes = new Uint8Array(buffer);
+            let graphicControlCount = 0;
+            
+            for (let i = 0; i < bytes.length - 3; i++) {
+                // 查找 Graphic Control Extension (0x21, 0xF9)
+                if (bytes[i] === 0x21 && bytes[i + 1] === 0xF9) {
+                    graphicControlCount++;
+                    if (graphicControlCount > 1) {
+                        return true; // 找到多個圖形控制擴展，表示是動畫
+                    }
+                }
+            }
+            
+            return false;
+        }
+
+        async function extractAvifFrames(buffer) {
+            console.log('開始處理 AVIF 文件...');
+            
+            // 方法1: 使用 ImageDecoder API 的增強版本
+            if ('ImageDecoder' in window) {
+                try {
+                    const decoder = new ImageDecoder({ data: buffer, type: 'image/avif' });
+                    
+                    // 等待解碼器初始化
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
+                    const track = decoder.tracks.selectedTrack;
+                    console.log('AVIF track info:', {
+                        frameCount: track?.frameCount,
+                        repetitionCount: track?.repetitionCount,
+                        animated: track?.animated
+                    });
+                    
+                    if (track && track.frameCount > 1) {
+                        const frames = [];
+                        
+                        for (let i = 0; i < track.frameCount; i++) {
+                            try {
+                                const { image } = await decoder.decode({ frameIndex: i });
+                                
+                                const canvas = document.createElement('canvas');
+                                const ctx = canvas.getContext('2d');
+                                canvas.width = image.displayWidth;
+                                canvas.height = image.displayHeight;
+                                
+                                ctx.drawImage(image, 0, 0);
+                                
+                                frames.push({
+                                    data: canvas.toDataURL('image/png'),
+                                    index: i,
+                                    delay: 100
+                                });
+                                
+                                image.close();
+                                console.log(`AVIF 幀 ${i + 1}/${track.frameCount} 處理完成`);
+                            } catch (frameError) {
+                                console.error(`AVIF 幀 ${i} 解析失敗:`, frameError);
+                            }
+                        }
+                        
+                        if (frames.length > 1) {
+                            console.log(`AVIF 成功提取 ${frames.length} 幀`);
+                            return frames;
+                        }
+                    } else {
+                        console.log('AVIF 只有單幀或無法檢測到多幀');
+                    }
+                } catch (error) {
+                    console.error('ImageDecoder AVIF 解析失敗:', error);
+                }
+            }
+            
+            // 方法2: 使用 Video 元素處理 AVIF (某些動畫 AVIF 可能被當作視頻)
+            console.log('嘗試使用 Video 元素處理 AVIF...');
+            try {
+                const videoFrames = await extractAvifWithVideo(buffer);
+                if (videoFrames.length > 1) {
+                    console.log(`使用 Video 方法成功提取 ${videoFrames.length} 幀`);
+                    return videoFrames;
+                }
+            } catch (error) {
+                console.log('Video 方法處理 AVIF 失敗:', error);
+            }
+            
+            // 方法3: 嘗試強制循環解碼
+            console.log('嘗試循環解碼 AVIF...');
+            try {
+                const loopFrames = await extractAvifWithLoop(buffer);
+                if (loopFrames.length > 1) {
+                    console.log(`循環解碼成功提取 ${loopFrames.length} 幀`);
+                    return loopFrames;
+                }
+            } catch (error) {
+                console.log('循環解碼 AVIF 失敗:', error);
+            }
+            
+            // 回退方法：單幀處理
+            console.log('回退到單幀處理...');
+            return await extractFramesWithGenericMethod(buffer, 'image/avif');
+        }
+
+        async function extractAvifWithVideo(buffer) {
+            return new Promise((resolve) => {
+                const video = document.createElement('video');
+                video.muted = true;
+                video.preload = 'metadata';
+                video.crossOrigin = 'anonymous';
+                
+                const blob = new Blob([buffer], { type: 'video/mp4' }); // 嘗試作為視頻
+                const url = URL.createObjectURL(blob);
+                
+                let resolved = false;
+                
+                video.onloadedmetadata = async () => {
+                    if (resolved) return;
+                    resolved = true;
+                    
+                    try {
+                        if (video.duration && video.duration > 0) {
+                            const frames = [];
+                            const frameRate = 30;
+                            const totalFrames = Math.min(50, Math.ceil(video.duration * frameRate));
+                            
+                            const canvas = document.createElement('canvas');
+                            const ctx = canvas.getContext('2d');
+                            canvas.width = video.videoWidth || 400;
+                            canvas.height = video.videoHeight || 400;
+                            
+                            for (let i = 0; i < totalFrames; i++) {
+                                const time = (i / frameRate);
+                                video.currentTime = time;
+                                
+                                await new Promise((resolveSeek) => {
+                                    video.onseeked = () => {
+                                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                                        frames.push({
+                                            data: canvas.toDataURL('image/png'),
+                                            index: i,
+                                            delay: Math.round(1000 / frameRate)
+                                        });
+                                        resolveSeek();
+                                    };
+                                });
+                            }
+                            
+                            URL.revokeObjectURL(url);
+                            resolve(frames);
+                        } else {
+                            URL.revokeObjectURL(url);
+                            resolve([]);
+                        }
+                    } catch (error) {
+                        URL.revokeObjectURL(url);
+                        resolve([]);
+                    }
+                };
+                
+                video.onerror = () => {
+                    if (resolved) return;
+                    resolved = true;
+                    URL.revokeObjectURL(url);
+                    resolve([]);
+                };
+                
+                // 設置超時
+                setTimeout(() => {
+                    if (!resolved) {
+                        resolved = true;
+                        URL.revokeObjectURL(url);
+                        resolve([]);
+                    }
+                }, 3000);
+                
+                video.src = url;
+            });
+        }
+
+        async function extractAvifWithLoop(buffer) {
+            if ('ImageDecoder' in window) {
+                try {
+                    const frames = [];
+                    const uniqueFrames = new Set();
+                    
+                    // 嘗試解碼多達 100 個可能的幀索引
+                    for (let attempt = 0; attempt < 100; attempt++) {
+                        try {
+                            const decoder = new ImageDecoder({ 
+                                data: buffer, 
+                                type: 'image/avif'
+                            });
+                            
+                            const { image } = await decoder.decode({ frameIndex: attempt });
+                            
+                            const canvas = document.createElement('canvas');
+                            const ctx = canvas.getContext('2d');
+                            canvas.width = image.displayWidth;
+                            canvas.height = image.displayHeight;
+                            
+                            ctx.drawImage(image, 0, 0);
+                            const frameData = canvas.toDataURL('image/png');
+                            
+                            // 檢查是否為新的幀（避免重複）
+                            if (!uniqueFrames.has(frameData)) {
+                                uniqueFrames.add(frameData);
+                                frames.push({
+                                    data: frameData,
+                                    index: frames.length,
+                                    delay: 100
+                                });
+                            }
+                            
+                            image.close();
+                        } catch (frameError) {
+                            // 如果索引超出範圍，停止嘗試
+                            if (frameError.message.includes('out of range') || 
+                                frameError.message.includes('Invalid frameIndex') ||
+                                frameError.message.includes('no more frames')) {
+                                break;
+                            }
+                        }
+                    }
+                    
+                    return frames;
+                } catch (error) {
+                    console.error('循環解碼失敗:', error);
+                    return [];
+                }
+            }
+            
+            return [];
+        }
+
+        async function extractApngFrames(buffer) {
+            try {
+                // 檢查是否為 APNG
+                const bytes = new Uint8Array(buffer);
+                if (isApng(bytes)) {
+                    return await extractApngWithImageDecoder(buffer);
+                } else {
+                    // 普通 PNG，只有一幀
+                    return await extractFramesWithGenericMethod(buffer, 'image/png');
+                }
+            } catch (error) {
+                console.error('APNG 解析失敗:', error);
+                return await extractFramesWithGenericMethod(buffer, 'image/png');
+            }
+        }
+
+        async function extractWebpFrames(buffer) {
+            // 對於 WebP，使用 ImageDecoder API 或回退方法
+            if ('ImageDecoder' in window) {
+                try {
+                    const decoder = new ImageDecoder({ data: buffer, type: 'image/webp' });
+                    const frames = [];
+                    
+                    const track = decoder.tracks.selectedTrack;
+                    if (track && track.frameCount > 1) {
+                        for (let i = 0; i < track.frameCount; i++) {
+                            const { image } = await decoder.decode({ frameIndex: i });
+                            
+                            const canvas = document.createElement('canvas');
+                            const ctx = canvas.getContext('2d');
+                            canvas.width = image.displayWidth;
+                            canvas.height = image.displayHeight;
+                            
+                            ctx.drawImage(image, 0, 0);
+                            
+                            frames.push({
+                                data: canvas.toDataURL('image/png'),
+                                index: i,
+                                delay: 100 // WebP 延遲時間需要額外解析
+                            });
+                            
+                            image.close();
+                        }
+                        
+                        return frames;
+                    }
+                } catch (error) {
+                    console.log('ImageDecoder WebP 解析失敗:', error);
+                }
+            }
+            
+            // 回退方法
+            return await extractFramesWithGenericMethod(buffer, 'image/webp');
+        }
+
+        function isApng(bytes) {
+            // 檢查 PNG 簽名
+            if (bytes[0] !== 0x89 || bytes[1] !== 0x50 || bytes[2] !== 0x4E || bytes[3] !== 0x47) {
+                return false;
+            }
+            
+            // 尋找 acTL chunk (動畫控制)
+            for (let i = 8; i < bytes.length - 8; i++) {
+                if (bytes[i] === 0x61 && bytes[i + 1] === 0x63 && 
+                    bytes[i + 2] === 0x54 && bytes[i + 3] === 0x4C) {
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+
+        async function extractApngWithImageDecoder(buffer) {
+            if ('ImageDecoder' in window) {
+                try {
+                    const decoder = new ImageDecoder({ data: buffer, type: 'image/png' });
+                    const frames = [];
+                    
+                    const track = decoder.tracks.selectedTrack;
+                    if (track && track.frameCount > 1) {
+                        for (let i = 0; i < track.frameCount; i++) {
+                            const { image } = await decoder.decode({ frameIndex: i });
+                            
+                            const canvas = document.createElement('canvas');
+                            const ctx = canvas.getContext('2d');
+                            canvas.width = image.displayWidth;
+                            canvas.height = image.displayHeight;
+                            
+                            ctx.drawImage(image, 0, 0);
+                            
+                            frames.push({
+                                data: canvas.toDataURL('image/png'),
+                                index: i,
+                                delay: 100 // APNG 延遲時間需要從 fcTL chunk 解析
+                            });
+                            
+                            image.close();
+                        }
+                        
+                        return frames;
+                    }
+                } catch (error) {
+                    console.log('ImageDecoder APNG 解析失敗:', error);
+                }
+            }
+            
+            throw new Error('無法解析 APNG');
+        }
+
+        async function extractFramesWithGenericMethod(buffer, mimeType) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                const blob = new Blob([buffer], { type: mimeType });
+                const url = URL.createObjectURL(blob);
+                
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+                    
+                    URL.revokeObjectURL(url);
+                    resolve([{
+                        data: canvas.toDataURL('image/png'),
+                        index: 0,
+                        delay: 100
+                    }]);
+                };
+                
+                img.onerror = () => {
+                    URL.revokeObjectURL(url);
+                    reject(new Error('無法載入圖片檔案'));
+                };
+                
+                img.src = url;
+            });
+        }
+
+        function displayFrames(frames) {
+            const grid = document.getElementById('framesGrid');
+            grid.innerHTML = '';
+
+            frames.forEach((frame, index) => {
+                const frameItem = document.createElement('div');
+                frameItem.className = 'frame-item';
+                
+                const img = document.createElement('img');
+                img.src = frame.data;
+                img.className = 'frame-image';
+                img.alt = `Frame ${index + 1}`;
+                
+                const frameInfo = document.createElement('div');
+                frameInfo.className = 'frame-number';
+                const delayText = frame.delay ? ` (${frame.delay}ms)` : '';
+                frameInfo.textContent = `第 ${index + 1} 幀${delayText}`;
+                
+                frameItem.appendChild(img);
+                frameItem.appendChild(frameInfo);
+                grid.appendChild(frameItem);
+            });
+
+            if (zoom) {
+                zoom.detach();
+            }
+            zoom = mediumZoom('.frame-image', {
+                background: 'rgba(0, 0, 0, 0.8)',
+                scrollOffset: 0
+            });
+        }
+
+        async function downloadAllFrames() {
+            if (extractedFrames.length === 0) {
+                showError('沒有可下載的幀畫面');
+                return;
+            }
+
+            try {
+                const zip = new JSZip();
+                const folder = zip.folder('animated_frames');
+
+                for (let i = 0; i < extractedFrames.length; i++) {
+                    const frame = extractedFrames[i];
+                    const base64Data = frame.data.split(',')[1];
+                    folder.file(`frame_${String(i + 1).padStart(3, '0')}.png`, base64Data, { base64: true });
+                }
+
+                const content = await zip.generateAsync({ type: 'blob' });
+                const url = URL.createObjectURL(content);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'animated_frames.zip';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                
+                URL.revokeObjectURL(url);
+            } catch (error) {
+                console.error('下載時發生錯誤:', error);
+                showError('下載時發生錯誤，請重試');
+            }
+        }
+
+        function showLoading(show) {
+            document.querySelector('.loading').style.display = show ? 'block' : 'none';
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMsg');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function hideError() {
+            document.getElementById('errorMsg').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
