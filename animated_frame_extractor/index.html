@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>動畫分解器</title>
-    <script src="https://cdn.jsdelivr.net/npm/medium-zoom@1.0.8/dist/medium-zoom.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/fancybox/fancybox.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/fancybox/fancybox.umd.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/omggif@1.0.10/omggif.js"></script>
     <style>
@@ -200,7 +201,6 @@
 
     <script>
         let extractedFrames = [];
-        let zoom;
         let gifCanvas;
         let gifCtx;
 
@@ -245,6 +245,13 @@
         }
 
         async function processAnimatedImage(file) {
+            // 隱藏之前的幀畫面
+            document.getElementById('framesSection').style.display = 'none';
+            // 清空之前的幀數據
+            extractedFrames = [];
+            const grid = document.getElementById('framesGrid');
+            grid.innerHTML = '';
+            
             showLoading(true);
             hideError();
             
@@ -305,6 +312,16 @@
                 canvas.width = reader.width;
                 canvas.height = reader.height;
                 
+                // 用於累積幀的 canvas（處理 GIF 的幀間差異）
+                const accumCanvas = document.createElement('canvas');
+                const accumCtx = accumCanvas.getContext('2d');
+                accumCanvas.width = reader.width;
+                accumCanvas.height = reader.height;
+                
+                // 背景色設定
+                accumCtx.fillStyle = '#FFFFFF';
+                accumCtx.fillRect(0, 0, accumCanvas.width, accumCanvas.height);
+                
                 for (let i = 0; i < reader.numFrames(); i++) {
                     const frameInfo = reader.frameInfo(i);
                     const frameData = new Uint8ClampedArray(reader.width * reader.height * 4);
@@ -312,9 +329,42 @@
                     // 解碼幀
                     reader.decodeAndBlitFrameRGBA(i, frameData);
                     
-                    // 創建 ImageData 並繪製到 canvas
+                    // 處理幀的處置方法
+                    if (i > 0) {
+                        const prevFrameInfo = reader.frameInfo(i - 1);
+                        if (prevFrameInfo.disposal === 2) {
+                            // 恢復背景色
+                            accumCtx.fillStyle = '#FFFFFF';
+                            accumCtx.fillRect(prevFrameInfo.x, prevFrameInfo.y, prevFrameInfo.width, prevFrameInfo.height);
+                        } else if (prevFrameInfo.disposal === 3) {
+                            // 恢復到前一幀（這裡簡化為不清除）
+                        }
+                        // disposal === 0 或 1：不清除，保持累積
+                    }
+                    
+                    // 創建當前幀的 ImageData
                     const imageData = new ImageData(frameData, reader.width, reader.height);
-                    ctx.putImageData(imageData, 0, 0);
+                    
+                    // 創建臨時 canvas 來處理透明度
+                    const tempCanvas = document.createElement('canvas');
+                    const tempCtx = tempCanvas.getContext('2d');
+                    tempCanvas.width = reader.width;
+                    tempCanvas.height = reader.height;
+                    
+                    // 將幀數據放到臨時 canvas
+                    tempCtx.putImageData(imageData, 0, 0);
+                    
+                    // 將當前幀合併到累積 canvas
+                    if (frameInfo.x !== undefined && frameInfo.y !== undefined) {
+                        accumCtx.drawImage(tempCanvas, frameInfo.x, frameInfo.y, frameInfo.width, frameInfo.height, 
+                                         frameInfo.x, frameInfo.y, frameInfo.width, frameInfo.height);
+                    } else {
+                        accumCtx.drawImage(tempCanvas, 0, 0);
+                    }
+                    
+                    // 將累積的結果複製到輸出 canvas
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(accumCanvas, 0, 0);
                     
                     frames.push({
                         data: canvas.toDataURL('image/png'),
@@ -338,20 +388,51 @@
                     const decoder = new ImageDecoder({ data: buffer, type: 'image/gif' });
                     const frames = [];
                     
-                    for (let i = 0; i < decoder.tracks.selectedTrack.frameCount; i++) {
+                    // 獲取 GIF 尺寸信息
+                    const track = decoder.tracks.selectedTrack;
+                    let gifWidth = 0, gifHeight = 0;
+                    
+                    // 先解碼第一幀來獲取尺寸
+                    if (track.frameCount > 0) {
+                        const { image: firstImage } = await decoder.decode({ frameIndex: 0 });
+                        gifWidth = firstImage.displayWidth;
+                        gifHeight = firstImage.displayHeight;
+                        firstImage.close();
+                    }
+                    
+                    // 創建累積畫布
+                    const accumCanvas = document.createElement('canvas');
+                    const accumCtx = accumCanvas.getContext('2d');
+                    accumCanvas.width = gifWidth;
+                    accumCanvas.height = gifHeight;
+                    
+                    // 設定背景色
+                    accumCtx.fillStyle = '#FFFFFF';
+                    accumCtx.fillRect(0, 0, gifWidth, gifHeight);
+                    
+                    // 創建輸出畫布
+                    const outputCanvas = document.createElement('canvas');
+                    const outputCtx = outputCanvas.getContext('2d');
+                    outputCanvas.width = gifWidth;
+                    outputCanvas.height = gifHeight;
+                    
+                    for (let i = 0; i < track.frameCount; i++) {
                         const { image } = await decoder.decode({ frameIndex: i });
                         
-                        const canvas = document.createElement('canvas');
-                        const ctx = canvas.getContext('2d');
-                        canvas.width = image.displayWidth;
-                        canvas.height = image.displayHeight;
+                        // 清除輸出畫布並複製累積畫布
+                        outputCtx.clearRect(0, 0, gifWidth, gifHeight);
+                        outputCtx.drawImage(accumCanvas, 0, 0);
                         
-                        ctx.drawImage(image, 0, 0);
+                        // 將新幀繪製到輸出畫布
+                        outputCtx.drawImage(image, 0, 0);
+                        
+                        // 同時更新累積畫布（用於下一幀）
+                        accumCtx.drawImage(image, 0, 0);
                         
                         frames.push({
-                            data: canvas.toDataURL('image/png'),
+                            data: outputCanvas.toDataURL('image/png'),
                             index: i,
-                            delay: decoder.tracks.selectedTrack.repetitionCount || 100
+                            delay: 100
                         });
                         
                         image.close();
@@ -529,46 +610,57 @@
                 canvas.width = img.width;
                 canvas.height = img.height;
                 
-                // 估算幀數
-                const estimatedFrames = Math.min(30, Math.max(5, Math.floor(this.buffer.byteLength / 5000)));
+                // 首先繪製完整的圖像作為第一幀
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0);
                 
-                let frameIndex = 0;
-                const captureFrame = () => {
+                frames.push({
+                    data: canvas.toDataURL('image/png'),
+                    index: 0,
+                    delay: 100
+                });
+                
+                // 檢查是否真的是動畫（如果只有一幀就直接返回）
+                if (!this.checkIfAnimated()) {
+                    resolve(frames);
+                    return;
+                }
+                
+                // 對於真正的動畫 GIF，嘗試使用時間基礎的採樣
+                const estimatedFrames = Math.min(20, Math.max(3, Math.floor(this.buffer.byteLength / 8000)));
+                
+                // 使用 setInterval 而不是 requestAnimationFrame 來更好地控制時間
+                let frameIndex = 1;
+                const intervalId = setInterval(() => {
                     if (frameIndex >= estimatedFrames) {
+                        clearInterval(intervalId);
                         resolve(frames);
                         return;
                     }
                     
-                    // 清除 canvas
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    // 重新載入圖像以獲取可能的不同幀
+                    const newImg = new Image();
+                    newImg.onload = () => {
+                        // 清除畫布並設定背景
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        
+                        // 繪製圖像
+                        ctx.drawImage(newImg, 0, 0);
+                        
+                        frames.push({
+                            data: canvas.toDataURL('image/png'),
+                            index: frameIndex,
+                            delay: 100
+                        });
+                        
+                        frameIndex++;
+                    };
                     
-                    // 使用不同的繪製方式來模擬不同幀
-                    const variation = frameIndex / estimatedFrames;
-                    ctx.save();
-                    
-                    // 輕微的位移或透明度變化來創建不同的幀
-                    if (frameIndex > 0) {
-                        const offset = Math.sin(variation * Math.PI * 2) * 2;
-                        ctx.translate(offset, 0);
-                        ctx.globalAlpha = 0.9 + (variation * 0.1);
-                    }
-                    
-                    ctx.drawImage(img, 0, 0);
-                    ctx.restore();
-                    
-                    frames.push({
-                        data: canvas.toDataURL('image/png'),
-                        index: frameIndex,
-                        delay: 100
-                    });
-                    
-                    frameIndex++;
-                    
-                    // 使用 requestAnimationFrame 來確保每幀都被正確捕獲
-                    requestAnimationFrame(captureFrame);
-                };
-                
-                captureFrame();
+                    // 重新設定 src 來觸發重新載入
+                    newImg.src = img.src + '?' + Date.now();
+                }, 50); // 每 50ms 嘗試一次
             }
 
             checkIfAnimated() {
@@ -975,6 +1067,8 @@
                 img.src = frame.data;
                 img.className = 'frame-image';
                 img.alt = `Frame ${index + 1}`;
+                img.setAttribute('data-fancybox', 'frames-gallery');
+                img.setAttribute('data-caption', `第 ${index + 1} 幀${frame.delay ? ` (${frame.delay}ms)` : ''}`);
                 
                 const frameInfo = document.createElement('div');
                 frameInfo.className = 'frame-number';
@@ -986,12 +1080,18 @@
                 grid.appendChild(frameItem);
             });
 
-            if (zoom) {
-                zoom.detach();
-            }
-            zoom = mediumZoom('.frame-image', {
-                background: 'rgba(0, 0, 0, 0.8)',
-                scrollOffset: 0
+            // 初始化 Fancybox
+            Fancybox.bind('[data-fancybox="frames-gallery"]', {
+                Toolbar: {
+                    display: {
+                        left: [],
+                        middle: [],
+                        right: ["thumbs", "close"],
+                    },
+                },
+                Thumbs: {
+                    autoStart: false,
+                },
             });
         }
 
