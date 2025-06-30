@@ -203,6 +203,7 @@
         let extractedFrames = [];
         let gifCanvas;
         let gifCtx;
+        let uploadedFileName = '';
 
         document.addEventListener('DOMContentLoaded', function() {
             const uploadArea = document.querySelector('.upload-area');
@@ -245,6 +246,9 @@
         }
 
         async function processAnimatedImage(file) {
+            // 儲存上傳檔案的原始檔名（去除副檔名）
+            uploadedFileName = file.name.replace(/\.[^/.]+$/, "");
+            
             // 隱藏之前的幀畫面
             document.getElementById('framesSection').style.display = 'none';
             // 清空之前的幀數據
@@ -1063,19 +1067,42 @@
                 const frameItem = document.createElement('div');
                 frameItem.className = 'frame-item';
                 
+                // 創建包含正確檔名的 blob URL
+                const fileName = uploadedFileName ? `${uploadedFileName} - ${index + 1}F.png` : `frame_${index + 1}.png`;
+                const base64Data = frame.data.split(',')[1];
+                const byteCharacters = atob(base64Data);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                const blob = new Blob([byteArray], { type: 'image/png' });
+                const blobUrl = URL.createObjectURL(blob);
+                
+                // 創建 <a> 標籤包裝圖片，設定 download 屬性
+                const link = document.createElement('a');
+                link.href = blobUrl;
+                link.download = fileName;
+                
                 const img = document.createElement('img');
-                img.src = frame.data;
+                img.src = frame.data; // 顯示用的 data URL
                 img.className = 'frame-image';
                 img.alt = `Frame ${index + 1}`;
                 img.setAttribute('data-fancybox', 'frames-gallery');
                 img.setAttribute('data-caption', `第 ${index + 1} 幀${frame.delay ? ` (${frame.delay}ms)` : ''}`);
+                img.setAttribute('data-src', blobUrl); // Fancybox 顯示用的 URL
+                img.setAttribute('data-download-src', blobUrl); // 下載用的 URL
+                img.setAttribute('data-download-filename', fileName); // 下載檔名
+                
+                // 將圖片包裝在連結中
+                link.appendChild(img);
                 
                 const frameInfo = document.createElement('div');
                 frameInfo.className = 'frame-number';
                 const delayText = frame.delay ? ` (${frame.delay}ms)` : '';
                 frameInfo.textContent = `第 ${index + 1} 幀${delayText}`;
                 
-                frameItem.appendChild(img);
+                frameItem.appendChild(link);
                 frameItem.appendChild(frameInfo);
                 grid.appendChild(frameItem);
             });
@@ -1086,14 +1113,39 @@
                     display: {
                         left: [],
                         middle: [],
-                        right: ["thumbs", "close"],
+                        right: ["download", "thumbs", "close"],
                     },
                 },
                 Thumbs: {
                     autoStart: false,
                 },
+                Images: {
+                    download: true
+                },
+                on: {
+                    reveal: (fancybox, slide) => {
+                        // 設定當前 slide 的下載屬性
+                        const triggerEl = slide.triggerEl;
+                        if (triggerEl) {
+                            const downloadSrc = triggerEl.getAttribute('data-download-src');
+                            const downloadFilename = triggerEl.getAttribute('data-download-filename');
+                            
+                            if (downloadSrc && downloadFilename) {
+                                // 設定 slide 的下載屬性，讓 Fancybox 的下載按鈕使用正確的檔名
+                                slide.downloadSrc = downloadSrc;
+                                slide.downloadFilename = downloadFilename;
+                                
+                                // 更新 slide 的 src 屬性
+                                if (slide.src) {
+                                    slide.src = downloadSrc;
+                                }
+                            }
+                        }
+                    }
+                }
             });
         }
+
 
         async function downloadAllFrames() {
             if (extractedFrames.length === 0) {
@@ -1103,20 +1155,23 @@
 
             try {
                 const zip = new JSZip();
-                const folder = zip.folder('animated_frames');
+                const folderName = uploadedFileName ? uploadedFileName : 'animated_frames';
+                const folder = zip.folder(folderName);
 
                 for (let i = 0; i < extractedFrames.length; i++) {
                     const frame = extractedFrames[i];
                     const base64Data = frame.data.split(',')[1];
-                    folder.file(`frame_${String(i + 1).padStart(3, '0')}.png`, base64Data, { base64: true });
+                    const fileName = uploadedFileName ? `${uploadedFileName} - ${i + 1}F.png` : `frame_${String(i + 1).padStart(3, '0')}.png`;
+                    folder.file(fileName, base64Data, { base64: true });
                 }
 
                 const content = await zip.generateAsync({ type: 'blob' });
                 const url = URL.createObjectURL(content);
                 
+                const zipFileName = uploadedFileName ? `${uploadedFileName} - 動畫分解.zip` : 'animated_frames.zip';
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'animated_frames.zip';
+                a.download = zipFileName;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
